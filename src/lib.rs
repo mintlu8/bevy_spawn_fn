@@ -106,7 +106,7 @@ pub trait Spawnable {
     fn spawn_mut<'t>(&mut self, spawner: &'t mut Spawner) -> EntityMutSpawner<'t> {
         spawner.spawn_empty()
     }
-    /// Spawn
+    /// Spawn children.
     #[allow(unused_variables)]
     fn spawn_children(&mut self, spawner: &mut Spawner) {}
 }
