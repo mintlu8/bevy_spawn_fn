@@ -37,9 +37,9 @@ scoped_thread_local!(static ASSET_SERVER: AssetServer);
 ///
 /// This can be manually created via [`spawner_scope`] or used inside an system or function annotated with
 /// [`spawner_fn`] or [`spawner_system`].
-/// 
+///
 /// # Syntax
-/// 
+///
 /// See [`infer_construct!`] and module level documentation of [`default_constructor`].
 #[macro_export]
 macro_rules! spawn {
@@ -103,7 +103,9 @@ pub trait Spawnable {
     /// Collect heterogenous components or bundles from a mutable reference of self.
     ///
     /// A common thing this might do is [`Option::take`] optional bundles and insert them.
-    fn spawn_mut<'t>(&mut self, spawner: &'t mut Spawner) -> EntityMutSpawner<'t>;
+    fn spawn_mut<'t>(&mut self, spawner: &'t mut Spawner) -> EntityMutSpawner<'t> {
+        spawner.spawn_empty()
+    }
     /// Spawn
     #[allow(unused_variables)]
     fn spawn_children(&mut self, spawner: &mut Spawner) {}
@@ -130,10 +132,6 @@ where
 {
     fn into_bundle(self) -> impl Bundle {
         IntoBundle::into_bundle(self)
-    }
-
-    fn spawn_mut<'t>(&mut self, spawner: &'t mut Spawner) -> EntityMutSpawner<'t> {
-        spawner.spawn_empty()
     }
 }
 

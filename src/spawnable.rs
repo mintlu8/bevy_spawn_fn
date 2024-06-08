@@ -94,6 +94,15 @@ impl Spawner<'_, '_, '_> {
         }
     }
 
+    pub fn spawn_bundle<B: Bundle>(&mut self, bundle: B) -> EntityMutSpawner {
+        match self {
+            Spawner::World(w) => EntityMutSpawner::EntityWorldMut(w.spawn(bundle)),
+            Spawner::Commands(w) => EntityMutSpawner::EntityCommands(w.spawn(bundle)),
+            Spawner::ChildBuilder(w) => EntityMutSpawner::EntityCommands(w.spawn(bundle)),
+            Spawner::WorldChildBuilder(w) => EntityMutSpawner::EntityWorldMut(w.spawn(bundle)),
+        }
+    }
+
     /// Spawn a [`IntoSpawnable`] with a spawner.
     pub fn spawn(&mut self, spawned: impl IntoSpawnable) -> Entity {
         let mut spawned = spawned.into_spawnable();
