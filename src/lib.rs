@@ -144,8 +144,11 @@ where
     }
 }
 
+#[cfg(test)]
 mod test {
-    use bevy_ecs::{bundle::Bundle, component::Component, world::World};
+    use bevy::app::App;
+    use bevy_asset::AssetPlugin;
+    use bevy_ecs::{bundle::Bundle, component::Component, system::RunSystemOnce, world::World};
     use bevy_hierarchy::WorldChildBuilder;
     use bevy_spawn_fn_derive::{spawner_fn, spawner_system};
 
@@ -204,5 +207,12 @@ mod test {
             b: "Ferris",
             c: '\0'
         });
+    }
+
+    #[test]
+    fn miri_test() {
+        let mut world = App::new();
+        world.add_plugins(AssetPlugin::default());
+        world.world.run_system_once(test3);
     }
 }
