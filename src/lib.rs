@@ -9,13 +9,13 @@ use std::{cell::Cell, ptr::null_mut};
 mod spawnable;
 pub use spawnable::*;
 
+#[doc(hidden)]
+pub use bevy_asset::AssetServer;
+#[doc(hidden)]
+pub use bevy_ecs::system::{Commands, Res};
 pub use bevy_spawn_fn_derive::*;
 #[doc(hidden)]
 pub use default_constructor::infer_construct;
-#[doc(hidden)]
-pub use bevy_ecs::system::Commands;
-#[doc(hidden)]
-pub use bevy_asset::AssetServer;
 
 /// Convert an item to a handle by registering using [`AssetServer::add`].
 #[doc(hidden)]
@@ -33,10 +33,14 @@ pub fn load<T: Asset>(a: AssetPath<'static>) -> Handle<T> {
 thread_local! {static SPAWNER: Cell<*mut Spawner<'static, 'static, 'static>> = const { Cell::new(null_mut()) } }
 scoped_thread_local!(static ASSET_SERVER: AssetServer);
 
-/// Spawn a [`IntoBundle`] using a thread local spawner, returns [`Entity`].
+/// Spawn a [`IntoSpawnable`] using a thread local spawner, returns [`Entity`].
 ///
 /// This can be manually created via [`spawner_scope`] or used inside an system or function annotated with
 /// [`spawner_fn`] or [`spawner_system`].
+/// 
+/// # Syntax
+/// 
+/// See [`infer_construct!`] and module level documentation of [`default_constructor`].
 #[macro_export]
 macro_rules! spawn {
     ($($tt: tt)*) => {
@@ -59,7 +63,10 @@ impl Drop for Reset {
 }
 
 /// Push a [`Spawner`] onto thread local storage in a scope.
-pub fn spawner_scope<'a, 'b: 'a, 'c: 'a, T>(spawner: &'a mut impl AsSpawner<'a, 'b, 'c>, f: impl FnOnce() -> T) -> T {
+pub fn spawner_scope<'a, 'b: 'a, 'c: 'a, T>(
+    spawner: &'a mut impl AsSpawner<'a, 'b, 'c>,
+    f: impl FnOnce() -> T,
+) -> T {
     let mut spawner = spawner.as_spawner();
     let prev = SPAWNER.replace((&mut spawner as *mut Spawner).cast());
     // for panic safety, this will reset the spawner during unwinding.
@@ -158,55 +165,46 @@ mod test {
     pub struct Abc {
         a: A,
         b: B,
-        c: C
+        c: C,
     }
 
     #[derive(Debug, Default)]
     pub struct IntoAbc {
         a: f32,
         b: String,
-        c: char
+        c: char,
     }
 
     impl IntoBundle for IntoAbc {
         fn into_bundle(self) -> impl Bundle {
-            Abc {
-                a: A, b: B, c: C
-            }
+            Abc { a: A, b: B, c: C }
         }
     }
 
-
     #[spawner_fn]
     fn test1(spawner: &mut World) {
-        spawn!(
-            IntoAbc {
-                a: 4,
-                b: "Ferris",
-                c: '\0'
-            }
-        );
+        spawn!(IntoAbc {
+            a: 4,
+            b: "Ferris",
+            c: '\0'
+        });
     }
 
     #[spawner_fn]
     fn test2(spawner: &mut WorldChildBuilder) {
-        spawn!(
-            IntoAbc {
-                a: 4,
-                b: "Ferris",
-                c: '\0'
-            }
-        );
+        spawn!(IntoAbc {
+            a: 4,
+            b: "Ferris",
+            c: '\0'
+        });
     }
 
     #[spawner_system]
     fn test3() {
-        spawn!(
-            IntoAbc {
-                a: 4,
-                b: "Ferris",
-                c: '\0'
-            }
-        );
+        spawn!(IntoAbc {
+            a: 4,
+            b: "Ferris",
+            c: '\0'
+        });
     }
 }

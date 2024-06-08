@@ -25,12 +25,12 @@ fn spawner_fn2(tokens: TokenStream) -> TokenStream {
         return quote! {#tokens compile_error!("Expected function.")};
     };
 
-    let bevy_spawnable = match proc_macro_crate::crate_name("bevy_spawn_fn") {
+    let bevy_spawn_fn = match proc_macro_crate::crate_name("bevy_spawn_fn") {
         Ok(FoundCrate::Itself) => {
             quote! {crate}
         }
         Ok(FoundCrate::Name(name)) => format_ident!("{name}").into_token_stream(),
-        Err(_) => return quote! {#tokens compile_error!("Expected crate bevy_spawnable.")},
+        Err(_) => return quote! {#tokens compile_error!("Expected crate bevy_spawn_fn.")},
     };
 
     let mut asset_server_found = false;
@@ -52,13 +52,13 @@ fn spawner_fn2(tokens: TokenStream) -> TokenStream {
 
     if asset_server_found {
         f.block = parse_quote!({
-            #bevy_spawnable::spawner_scope(spawner, || {
-                #bevy_spawnable::asset_server_scope(&asset_server, || #block)
+            #bevy_spawn_fn::spawner_scope(spawner, || {
+                #bevy_spawn_fn::asset_server_scope(&asset_server, || #block)
             })
         });
     } else {
         f.block = parse_quote!({
-            #bevy_spawnable::spawner_scope(spawner, || #block)
+            #bevy_spawn_fn::spawner_scope(spawner, || #block)
         });
     }
 
@@ -76,26 +76,26 @@ fn spawner_system2(tokens: TokenStream) -> TokenStream {
         return quote! {#tokens compile_error!("Expected function.")};
     };
 
-    let bevy_spawnable = match proc_macro_crate::crate_name("bevy_spawn_fn") {
+    let bevy_spawn_fn = match proc_macro_crate::crate_name("bevy_spawn_fn") {
         Ok(FoundCrate::Itself) => {
             quote! {crate}
         }
         Ok(FoundCrate::Name(name)) => format_ident!("{name}").into_token_stream(),
-        Err(_) => return quote! {#tokens compile_error!("Expected crate bevy_spawnable.")},
+        Err(_) => return quote! {#tokens compile_error!("Expected crate bevy_spawn_fn.")},
     };
 
     f.sig.inputs.push(parse_quote!(
-        mut __spawn_commands: #bevy_spawnable::Commands
+        mut __spawn_commands: #bevy_spawn_fn::Commands
     ));
     f.sig.inputs.push(parse_quote!(
-        __spawn_asset_server: #bevy_spawnable::AssetServer
+        __spawn_asset_server: #bevy_spawn_fn::Res<#bevy_spawn_fn::AssetServer>
     ));
 
     let block = f.block;
 
     f.block = parse_quote!({
-        #bevy_spawnable::spawner_scope(&mut __spawn_commands, || {
-            #bevy_spawnable::asset_server_scope(&__spawn_asset_server, || #block)
+        #bevy_spawn_fn::spawner_scope(&mut __spawn_commands, || {
+            #bevy_spawn_fn::asset_server_scope(&__spawn_asset_server, || #block)
         })
     });
     f.to_token_stream()
