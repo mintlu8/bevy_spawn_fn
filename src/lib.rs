@@ -213,6 +213,6 @@ mod test {
     fn miri_test() {
         let mut world = App::new();
         world.add_plugins(AssetPlugin::default());
-        world.world.run_system_once(test3);
+        world.world_mut().run_system_once(test3);
     }
 }

@@ -1,10 +1,12 @@
 use bevy::{
     app::{App, Startup},
+    color::Color,
     core_pipeline::core_2d::Camera2dBundle,
     math::{Vec2, Vec3},
-    render::{color::Color, texture::Image},
+    prelude::TransformBundle,
+    render::texture::Image,
     sprite::{Sprite, SpriteBundle},
-    transform::{components::Transform, TransformBundle},
+    transform::components::Transform,
     DefaultPlugins,
 };
 use bevy_asset::Handle;
@@ -61,7 +63,7 @@ fn startup() {
 
     spawn!(SpriteBundle {
         sprite: Sprite {
-            color: Color::rgb(2., 2., 2.),
+            color: Color::srgb(2., 2., 2.),
             custom_size: @some [64., 64.],
         },
         texture: @load "circle.png",
@@ -71,7 +73,7 @@ fn startup() {
     });
 
     spawn!(ManySprites {
-        color: Color::rgb(3., 3., 3.),
+        color: Color::srgb(3., 3., 3.),
         size: [40., 40.],
         texture: @load "circle.png",
         root_pos: [-20., 0., 0.],

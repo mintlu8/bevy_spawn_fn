@@ -44,12 +44,14 @@ pub enum Spawner<'t, 'a, 'b> {
     Commands(&'t mut Commands<'a, 'b>),
     ChildBuilder(&'t mut ChildBuilder<'a>),
     WorldChildBuilder(&'t mut WorldChildBuilder<'a>),
+    Scoped(Box<dyn ScopedSpawner>),
 }
 
 /// Mutable reference to an [`Entity`].
 pub enum EntityMutSpawner<'a> {
     EntityWorldMut(EntityWorldMut<'a>),
     EntityCommands(EntityCommands<'a>),
+    Scoped(Box<dyn ScopedEntityMut>),
 }
 
 impl<'t> EntityMutSpawner<'t> {
@@ -62,6 +64,10 @@ impl<'t> EntityMutSpawner<'t> {
             EntityMutSpawner::EntityCommands(x) => {
                 x.insert(bundle);
             }
+            EntityMutSpawner::Scoped(x) => {
+                let mut once = Some(bundle);
+                x.entity_mut_scope(&mut |x| x.insert(once.take().unwrap()));
+            }
         }
     }
 
@@ -73,6 +79,10 @@ impl<'t> EntityMutSpawner<'t> {
             EntityMutSpawner::EntityCommands(x) => {
                 x.with_children(|x| f(Spawner::ChildBuilder(x)));
             }
+            EntityMutSpawner::Scoped(x) => {
+                let mut once = Some(f);
+                x.entity_mut_scope(&mut |x| x.spawn_children(once.take().unwrap()));
+            }
         }
     }
 
@@ -80,26 +90,34 @@ impl<'t> EntityMutSpawner<'t> {
         match self {
             EntityMutSpawner::EntityWorldMut(x) => x.id(),
             EntityMutSpawner::EntityCommands(x) => x.id(),
+            EntityMutSpawner::Scoped(x) => x.id(),
         }
     }
 }
 
 impl Spawner<'_, '_, '_> {
+    /// Spawn a empty [`Entity`] with a spawner.
     pub fn spawn_empty(&mut self) -> EntityMutSpawner {
         match self {
             Spawner::World(w) => EntityMutSpawner::EntityWorldMut(w.spawn_empty()),
             Spawner::Commands(w) => EntityMutSpawner::EntityCommands(w.spawn_empty()),
             Spawner::ChildBuilder(w) => EntityMutSpawner::EntityCommands(w.spawn_empty()),
             Spawner::WorldChildBuilder(w) => EntityMutSpawner::EntityWorldMut(w.spawn_empty()),
+            Spawner::Scoped(w) => w.spawner_scope(&mut |w| w.spawn_empty().id()),
         }
     }
 
+    /// Spawn a [`Bundle`] with a spawner.
     pub fn spawn_bundle<B: Bundle>(&mut self, bundle: B) -> EntityMutSpawner {
         match self {
             Spawner::World(w) => EntityMutSpawner::EntityWorldMut(w.spawn(bundle)),
             Spawner::Commands(w) => EntityMutSpawner::EntityCommands(w.spawn(bundle)),
             Spawner::ChildBuilder(w) => EntityMutSpawner::EntityCommands(w.spawn(bundle)),
             Spawner::WorldChildBuilder(w) => EntityMutSpawner::EntityWorldMut(w.spawn(bundle)),
+            Spawner::Scoped(w) => {
+                let mut once = Some(bundle);
+                w.spawner_scope(&mut move |w| w.spawn(once.take().unwrap()))
+            }
         }
     }
 
@@ -111,4 +129,19 @@ impl Spawner<'_, '_, '_> {
         entity_mut.insert(spawned.into_bundle());
         entity_mut.id()
     }
+}
+
+/// A global dynamic spawner.
+///
+/// This is meant to support `bevy_defer`.
+pub trait ScopedSpawner {
+    fn spawner_scope(&mut self, f: &mut dyn FnMut(&mut Spawner) -> Entity) -> EntityMutSpawner;
+}
+
+/// A global dynamic spawner.
+///
+/// This is meant to support `bevy_defer`,
+pub trait ScopedEntityMut {
+    fn id(&self) -> Entity;
+    fn entity_mut_scope(&mut self, f: &mut dyn FnMut(&mut EntityMutSpawner));
 }
