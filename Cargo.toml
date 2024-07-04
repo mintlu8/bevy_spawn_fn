@@ -3,7 +3,7 @@ members = [ "derive" ]
 
 [package]
 name = "bevy_spawn_fn"
-version = "0.2.0-rc.4"
+version = "0.2.0"
 edition = "2021"
 
 authors = ["Mincong Lu <mintlux667@gmail.com>"]
@@ -20,12 +20,12 @@ keywords = ["bevy", "spawn", "spawning"]
 doctest = false
 
 [dependencies]
-bevy_asset = "0.14.0-rc.4"
-bevy_ecs = "0.14.0-rc.4"
-bevy_hierarchy = "0.14.0-rc.4"
+bevy_asset = "0.14.0"
+bevy_ecs = "0.14.0"
+bevy_hierarchy = "0.14.0"
 default-constructor = "0.3.0"
 scoped-tls-hkt = "0.1.4"
 bevy_spawn_fn_derive = { version = "0.1", path = "./derive" }
 
 [dev-dependencies]
-bevy = "0.14.0-rc.4"
+bevy = "0.14.0"
