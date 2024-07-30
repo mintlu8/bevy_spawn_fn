@@ -1,10 +1,10 @@
 #![doc = include_str!("../README.md")]
-
-use bevy_asset::{Asset, AssetPath, Handle};
-use bevy_ecs::{bundle::Bundle, entity::Entity};
+#![allow(clippy::type_complexity)]
+use bevy_asset::{meta::Settings, Asset, AssetPath, Assets, Handle, UntypedHandle};
+use bevy_ecs::{bundle::Bundle, component::{Component, ComponentHooks, StorageType}, entity::Entity};
 pub use default_constructor::InferInto;
 use scoped_tls_hkt::scoped_thread_local;
-use std::{cell::Cell, ptr::null_mut};
+use std::{borrow::Cow, cell::Cell, marker::PhantomData, mem, ptr::null_mut};
 
 mod spawnable;
 pub use spawnable::*;
@@ -141,6 +141,100 @@ where
 {
     fn into_spawnable(self) -> impl Spawnable {
         self
+    }
+}
+
+/// [`Component`] that immediately removes itself, adds the underlying
+/// value to [`Assets<T>`] and inserts a [`Handle<T>`].
+#[derive(Debug)]
+pub struct AddMe<T: Asset>(Option<T>);
+
+impl<T: Asset> AddMe<T> {
+    pub const fn new(item: T) -> Self {
+        AddMe(Some(item))
+    }
+}
+
+impl<T: Asset> Component for AddMe<T> {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_insert(|mut world, entity, _| {
+            (|| {
+                let item = world.get_entity_mut(entity)?.get_mut::<Self>()?.0.take()?;
+                let handle = world.resource_mut::<Assets<T>>().add(item);
+                world.commands().entity(entity)
+                    .remove::<Self>()
+                    .insert(handle);
+                Some(())
+            })();
+        });
+    }
+}
+
+/// [`Component`] that immediately removes itself, loads the underlying path
+/// and inserts a [`Handle<T>`].
+pub struct LoadMe<T: Asset> {
+    name: Cow<'static, str>,
+    settings: Option<Box<dyn FnOnce(&AssetServer, Cow<str>) -> UntypedHandle + Send + Sync>>,
+    p: PhantomData<T>
+}
+
+impl<T: Asset> Default for  LoadMe<T> {
+    fn default() -> Self {
+        Self { 
+            name: Cow::Borrowed(""),
+            settings: None,
+            p: PhantomData,
+        }
+    }
+}
+
+impl<T: Asset> LoadMe<T> {
+    pub const fn new_static(path: &'static str) -> Self {
+        LoadMe { 
+            name: Cow::Borrowed(path), 
+            settings: None, 
+            p: PhantomData
+        }
+    }
+
+    pub fn new(path: impl Into<String>) -> Self {
+        LoadMe { 
+            name: Cow::Owned(path.into()), 
+            settings: None, 
+            p: PhantomData
+        }
+    }
+
+    pub fn new_with_settings<S: Settings>(path: impl Into<String>, settings: impl Fn(&mut S) + Send + Sync + 'static) -> Self {
+        LoadMe { 
+            name: Cow::Owned(path.into()), 
+            settings: Some(Box::new(|assets, name| {
+                UntypedHandle::from(assets.load_with_settings::<T, _>(name.into_owned(), settings))
+            })), 
+            p: PhantomData
+        }
+    }
+}
+
+impl<T: Asset> Component for LoadMe<T> {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+    fn register_component_hooks(hooks: &mut ComponentHooks) {
+        hooks.on_insert(|mut world, entity, _| {
+            (|| {
+                let item = mem::take(world.get_entity_mut(entity)?.get_mut::<Self>()?.as_mut());
+                let handle: Handle<T> = if let Some(loader) = item.settings {
+                    loader(world.resource::<AssetServer>(), item.name)
+                        .try_into().expect("Expected Handle<T>")
+                } else {
+                    world.resource::<AssetServer>().load(item.name.into_owned())
+                };
+                world.commands().entity(entity)
+                    .remove::<Self>()
+                    .insert(handle);
+                Some(())
+            })();
+        });
     }
 }
 
