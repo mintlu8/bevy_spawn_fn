@@ -3,7 +3,7 @@ use bevy::{
     color::Color,
     core_pipeline::core_2d::Camera2dBundle,
     math::{Vec2, Vec3},
-    prelude::TransformBundle,
+    prelude::{TransformBundle, VisibilityBundle},
     render::texture::Image,
     sprite::{Sprite, SpriteBundle},
     transform::components::Transform,
@@ -11,6 +11,7 @@ use bevy::{
 };
 use bevy_asset::Handle;
 use bevy_spawn_fn::*;
+use default_constructor::infer_construct;
 
 pub fn main() {
     App::new()
@@ -59,7 +60,7 @@ impl Spawnable for ManySprites {
 
 #[spawner_system]
 fn startup() {
-    spawn!(Camera2dBundle {});
+    spawn!(Camera2dBundle);
 
     spawn!(SpriteBundle {
         sprite: Sprite {
@@ -71,6 +72,20 @@ fn startup() {
             translation: [20., 0., 0.]
         }
     });
+
+    spawn!(
+        Sprite {
+            color: Color::srgb(2., 2., 2.),
+            custom_size: @some [64., 64.],
+        },
+        (__spawn_asset_server.load::<Image>("circle.png")),
+        TransformBundle {
+            local: Transform {
+                translation: [-20., 0., 0.]
+            }
+        },
+        VisibilityBundle,
+    );
 
     spawn!(ManySprites {
         color: Color::srgb(3., 3., 3.),

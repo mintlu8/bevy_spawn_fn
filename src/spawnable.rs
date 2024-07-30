@@ -6,7 +6,7 @@ use bevy_ecs::{
 };
 use bevy_hierarchy::{BuildChildren, BuildWorldChildren, ChildBuilder, WorldChildBuilder};
 
-use crate::{IntoSpawnable, Spawnable};
+use crate::{IntoSpawnable, SpawnChildScope, Spawnable};
 
 /// A type that can spawn [`Bundle`]s.
 pub trait AsSpawner<'t, 'a, 'b> {
@@ -91,6 +91,22 @@ impl<'t> EntityMutSpawner<'t> {
             EntityMutSpawner::EntityWorldMut(x) => x.id(),
             EntityMutSpawner::EntityCommands(x) => x.id(),
             EntityMutSpawner::Scoped(x) => x.id(),
+        }
+    }
+
+    /// Create a function scope that can use [`spawn!`](crate::spawn!) to create children.
+    pub fn spawn_child_scope(&mut self, f: impl FnOnce()) {
+        match self {
+            EntityMutSpawner::EntityWorldMut(x) => {
+                x.spawn_child_scope(f);
+            }
+            EntityMutSpawner::EntityCommands(x) => {
+                x.spawn_child_scope(f);
+            }
+            EntityMutSpawner::Scoped(x) => {
+                let mut once = Some(f);
+                x.entity_mut_scope(&mut move |e| e.spawn_child_scope(once.take().unwrap()))
+            }
         }
     }
 }

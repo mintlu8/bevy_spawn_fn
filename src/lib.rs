@@ -1,7 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![allow(clippy::type_complexity)]
 use bevy_asset::{meta::Settings, Asset, AssetPath, Assets, Handle, UntypedHandle};
-use bevy_ecs::{bundle::Bundle, component::{Component, ComponentHooks, StorageType}, entity::Entity};
+use bevy_ecs::{
+    bundle::Bundle,
+    component::{Component, ComponentHooks, StorageType},
+    entity::Entity,
+    system::EntityCommands,
+    world::EntityWorldMut,
+};
+use bevy_hierarchy::{BuildChildren, BuildWorldChildren};
 pub use default_constructor::InferInto;
 use scoped_tls_hkt::scoped_thread_local;
 use std::{borrow::Cow, cell::Cell, marker::PhantomData, mem, ptr::null_mut};
@@ -15,7 +22,7 @@ pub use bevy_asset::AssetServer;
 pub use bevy_ecs::system::{Commands, Res};
 pub use bevy_spawn_fn_derive::*;
 #[doc(hidden)]
-pub use default_constructor::infer_construct;
+pub use default_constructor;
 
 /// Convert an item to a handle by registering using [`AssetServer::add`].
 #[doc(hidden)]
@@ -45,11 +52,16 @@ scoped_thread_local!(static ASSET_SERVER: AssetServer);
 macro_rules! spawn {
     ($($tt: tt)*) => {
         {
-            #[allow(unused_imports)]
+            #[allow(unused)]
+            use $crate::default_constructor::effects::*;
+            #[allow(unused)]
             use $crate::{asset, load};
-            $crate::spawn($crate::infer_construct! {
-                $($tt)*
-            })
+            $crate::spawn(
+                $crate::default_constructor::meta_default_constructor! {
+                    [$crate::default_constructor::infer_into]
+                    $($tt)*
+                }
+            )
         }
     };
 }
@@ -144,6 +156,24 @@ where
     }
 }
 
+/// Create a function scope that can use [`spawn!`] to create children.
+pub trait SpawnChildScope {
+    /// Create a function scope that can use [`spawn!`] to create children.
+    fn spawn_child_scope(&mut self, f: impl FnOnce()) -> &mut Self;
+}
+
+impl SpawnChildScope for EntityCommands<'_> {
+    fn spawn_child_scope(&mut self, f: impl FnOnce()) -> &mut Self {
+        self.with_children(|spawner| spawner_scope(spawner, f))
+    }
+}
+
+impl SpawnChildScope for EntityWorldMut<'_> {
+    fn spawn_child_scope(&mut self, f: impl FnOnce()) -> &mut Self {
+        self.with_children(|spawner| spawner_scope(spawner, f))
+    }
+}
+
 /// [`Component`] that immediately removes itself, adds the underlying
 /// value to [`Assets<T>`] and inserts a [`Handle<T>`].
 #[derive(Debug)]
@@ -162,7 +192,9 @@ impl<T: Asset> Component for AddMe<T> {
             (|| {
                 let item = world.get_entity_mut(entity)?.get_mut::<Self>()?.0.take()?;
                 let handle = world.resource_mut::<Assets<T>>().add(item);
-                world.commands().entity(entity)
+                world
+                    .commands()
+                    .entity(entity)
                     .remove::<Self>()
                     .insert(handle);
                 Some(())
@@ -176,12 +208,12 @@ impl<T: Asset> Component for AddMe<T> {
 pub struct LoadMe<T: Asset> {
     name: Cow<'static, str>,
     settings: Option<Box<dyn FnOnce(&AssetServer, Cow<str>) -> UntypedHandle + Send + Sync>>,
-    p: PhantomData<T>
+    p: PhantomData<T>,
 }
 
-impl<T: Asset> Default for  LoadMe<T> {
+impl<T: Asset> Default for LoadMe<T> {
     fn default() -> Self {
-        Self { 
+        Self {
             name: Cow::Borrowed(""),
             settings: None,
             p: PhantomData,
@@ -191,28 +223,31 @@ impl<T: Asset> Default for  LoadMe<T> {
 
 impl<T: Asset> LoadMe<T> {
     pub const fn new_static(path: &'static str) -> Self {
-        LoadMe { 
-            name: Cow::Borrowed(path), 
-            settings: None, 
-            p: PhantomData
+        LoadMe {
+            name: Cow::Borrowed(path),
+            settings: None,
+            p: PhantomData,
         }
     }
 
     pub fn new(path: impl Into<String>) -> Self {
-        LoadMe { 
-            name: Cow::Owned(path.into()), 
-            settings: None, 
-            p: PhantomData
+        LoadMe {
+            name: Cow::Owned(path.into()),
+            settings: None,
+            p: PhantomData,
         }
     }
 
-    pub fn new_with_settings<S: Settings>(path: impl Into<String>, settings: impl Fn(&mut S) + Send + Sync + 'static) -> Self {
-        LoadMe { 
-            name: Cow::Owned(path.into()), 
+    pub fn new_with_settings<S: Settings>(
+        path: impl Into<String>,
+        settings: impl Fn(&mut S) + Send + Sync + 'static,
+    ) -> Self {
+        LoadMe {
+            name: Cow::Owned(path.into()),
             settings: Some(Box::new(|assets, name| {
                 UntypedHandle::from(assets.load_with_settings::<T, _>(name.into_owned(), settings))
-            })), 
-            p: PhantomData
+            })),
+            p: PhantomData,
         }
     }
 }
@@ -225,11 +260,14 @@ impl<T: Asset> Component for LoadMe<T> {
                 let item = mem::take(world.get_entity_mut(entity)?.get_mut::<Self>()?.as_mut());
                 let handle: Handle<T> = if let Some(loader) = item.settings {
                     loader(world.resource::<AssetServer>(), item.name)
-                        .try_into().expect("Expected Handle<T>")
+                        .try_into()
+                        .expect("Expected Handle<T>")
                 } else {
                     world.resource::<AssetServer>().load(item.name.into_owned())
                 };
-                world.commands().entity(entity)
+                world
+                    .commands()
+                    .entity(entity)
                     .remove::<Self>()
                     .insert(handle);
                 Some(())
